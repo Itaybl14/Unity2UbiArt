@@ -23,7 +23,7 @@ for filename in os.listdir('input'):
     mainjson = json.load(open('input/' + filename, encoding='UTF-8')) # loading the json file
     MapName = mainjson['m_Name']
     tape = {"__class":"Tape","Clips":[],"TapeClock":0,"TapeBarCount":1,"FreeResourcesAfterPlay":0,"MapName":MapName,"SoundwichEvent":""}
-    print(f'[OCNVERTING] {MapName}')
+    print(f'[CONVERTING] {MapName}')
     try:
         os.mkdir('output/' + MapName)
     except:
