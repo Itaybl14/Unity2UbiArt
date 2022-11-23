@@ -7,6 +7,6 @@ A simple script for converting Unity Just Dance tape's to UbiArt Just Dance tape
 ## Credits
 
  - [Rama](https://github.com/rama0dev)
- - [WorteJD](https://github.com/WorteJD)
+ - [Worte](https://github.com/WorteJD)
 
 ### - Please credit us in your work.
