@@ -23,42 +23,45 @@ class Util:
 
             output_pictogram.save(output_path)
 
-    def convert_list(input, __class):
-        output = []
+    def convert_list(input_data, __class):
+        def convert_entry(entry):
+            # Setting up the __class
+            entry[__class]['__class'] = __class
 
-        for item in input:
-            value = item[__class]
-            value['__class'] = __class
-
-            output.append(value)
+            # Returning the entry
+            return entry[__class]
         
-        return output
+        output = map(convert_entry, input_data)
+        return list(output)
     
-    def convert_color(input):
-        rgb = ImageColor.getcolor(input, 'RGB')
-        output = []
+    def convert_color(input_data):
+        try:
+            # For some reason it uses hex colors with 0xFF in the start just like Just Dance Now
+            rgb = ImageColor.getcolor(input_data.replace('0xFF', ''), 'RGB')
+            
+            output = [1.0] # First floating-point number is alpha
+            for color in rgb:
+                output.append(float('{:.8f}'.format(color)))
 
-        output.append(float(str(float(100) / 100)[:8]))
-        output.append(float(str(rgb[0] / 255)[:8]))
-        output.append(float(str(rgb[1] / 255)[:8]))
-        output.append(float(str(rgb[2] / 255)[:8]))
-
-        return output
+            return output
+        except:
+            # (Default) Red color
+            return [1.0, 1.0, 0.0, 0.0]
     
     def get_random_id():
         return random.randint(1000000000, 9999999999)
     
     def load_file(input_path):
-        return json.load(open(input_path, encoding='UTF-8'))
+        with open(input_path, encoding="utf-8") as file:
+            return json.load(file)
     
-    def save_file(output_path, input):
-        open(output_path, 'w', encoding='UTF-8').write(json.dumps(input))
+    def save_file(output_path, input_data):
+        with open(output_path, "w", encoding="utf-8") as file:
+            json.dump(input_data, file)
     
     def make_folder(input_folder):
-        try:
+        if not os.path.exists(input_folder):
             os.mkdir(input_folder)
-        except:
-            pass
     
     def log(author, message):
         print(f'[{author}] {message}')
@@ -73,7 +76,15 @@ for folder_name in os.listdir('input'):
     Util.log('Tool', f'Started converting {map_name}!')
     Util.make_folder(f'output/{map_name}')
 
-    tape = {"__class":"Tape","Clips":[],"TapeClock":0,"TapeBarCount":1,"FreeResourcesAfterPlay":0,"MapName":map_name,"SoundwichEvent":""}
+    tape = {
+        "__class": "Tape",
+        "Clips": [],
+        "TapeClock": 0,
+        "TapeBarCount": 1,
+        "FreeResourcesAfterPlay": 0,
+        "MapName": map_name,
+        "SoundwichEvent": ""
+    }
 
     for clip in map_json['KaraokeData']['Clips']:
         karaoke_clip = clip['KaraokeClip']
@@ -92,11 +103,7 @@ for folder_name in os.listdir('input'):
     for motion_clip in map_json['DanceData']['MotionClips']:
         motion_clip['__class'] = 'MotionClip'
         motion_clip['MoveType'] = 0
-        
-        try:
-            motion_clip['Color'] = Util.convert_color(motion_clip['Color'].replace('0xFF', '')) # for some reason it uses hex colors with 0xFF in the start just like Just Dance Now
-        except:
-            motion_clip['Color'] = [1,1,0,0] # red
+        motion_clip['Color'] = Util.convert_color(motion_clip['Color'])
 
         if f'world/maps/{map_name.lower()}/timeline/moves' and '.gesture' not in motion_clip['MoveName']:
             motion_clip['ClassifierPath'] = f"world/maps/{map_name.lower()}/timeline/moves/{motion_clip['MoveName']}.msm"
@@ -125,14 +132,14 @@ for folder_name in os.listdir('input'):
     # Song Description
     song_desc = map_json['SongDesc']
     __song_desc = {
-    "__class": "Actor_Template",
-    "WIP": 0,
-    "LOWUPDATE": 0,
-    "UPDATE_LAYER": 0,
-    "PROCEDURAL": 0,
-    "STARTPAUSED": 0,
-    "FORCEISENVIRONMENT": 0,
-    "COMPONENTS": [{
+        "__class": "Actor_Template",
+        "WIP": 0,
+        "LOWUPDATE": 0,
+        "UPDATE_LAYER": 0,
+        "PROCEDURAL": 0,
+        "STARTPAUSED": 0,
+        "FORCEISENVIRONMENT": 0,
+        "COMPONENTS": [{
             "__class": "JD_SongDescTemplate",
             "MapName": map_name,
             "JDVersion": config['JDVersion'],
@@ -141,8 +148,7 @@ for folder_name in os.listdir('input'):
             "DancerName": "Unknown Dancer",
             "Title": song_desc['Title'],
             "Credits":  song_desc['Credits'],
-            "PhoneImages": {
-                "cover": f"world/maps/{map_name.lower()}/menuart/textures/{map_name.lower()}_cover_phone.jpg"},
+            "PhoneImages": {"cover": f"world/maps/{map_name.lower()}/menuart/textures/{map_name.lower()}_cover_phone.jpg"},
             "NumCoach": song_desc['NumCoach'],
             "MainCoach": -1, # without it the coaches says rip so
             "Difficulty": song_desc['Difficulty'],
@@ -156,8 +162,8 @@ for folder_name in os.listdir('input'):
             "CountInProgression": 1,
             "DefaultColors": config['DefaultColors'],
             "VideoPreviewPath": ""
-        }
-    ]}
+        }]
+    }
 
     for i in range(song_desc['NumCoach']):
         i += 1
@@ -174,36 +180,36 @@ for folder_name in os.listdir('input'):
         markers.append(marker['VAL'])
     
     __music_track = {
-    "__class": "Actor_Template",
-    "WIP": 0,
-    "LOWUPDATE": 0,
-    "UPDATE_LAYER": 0,
-    "PROCEDURAL": 0,
-    "STARTPAUSED": 0,
-    "FORCEISENVIRONMENT": 0,
-    "COMPONENTS": [{
-            "__class": "MusicTrackComponent_Template",
-            "trackData": {
-                "__class": "MusicTrackData",
-                "structure": {
-                    "__class": "MusicTrackStructure",
-                    "markers": markers,
-                    "signatures": Util.convert_list(music_track_structure['signatures'], 'MusicSignature'),
-                    "sections": Util.convert_list(music_track_structure['sections'], 'MusicSection'),
-                    "startBeat": music_track_structure['startBeat'],
-                    "endBeat": music_track_structure['endBeat'],
-                    "videoStartTime": music_track_structure['videoStartTime'],
-                    "previewEntry": music_track_structure['previewEntry'],
-                    "previewLoopStart": music_track_structure['previewLoopStart'],
-                    "previewLoopEnd": music_track_structure['previewLoopEnd'],
-                    "volume": music_track_structure['volume']
-                },
-                "path": f"world/maps/{map_name.lower()}/audio/{map_name.lower()}.ogg",
-                "url": f"jmcs://jd-contents/{map_name}/{map_name}.ogg"
+        "__class": "Actor_Template",
+        "WIP": 0,
+        "LOWUPDATE": 0,
+        "UPDATE_LAYER": 0,
+        "PROCEDURAL": 0,
+        "STARTPAUSED": 0,
+        "FORCEISENVIRONMENT": 0,
+        "COMPONENTS": [{
+                "__class": "MusicTrackComponent_Template",
+                "trackData": {
+                    "__class": "MusicTrackData",
+                    "structure": {
+                        "__class": "MusicTrackStructure",
+                        "markers": markers,
+                        "signatures": Util.convert_list(music_track_structure['signatures'], 'MusicSignature'),
+                        "sections": Util.convert_list(music_track_structure['sections'], 'MusicSection'),
+                        "startBeat": music_track_structure['startBeat'],
+                        "endBeat": music_track_structure['endBeat'],
+                        "videoStartTime": music_track_structure['videoStartTime'],
+                        "previewEntry": music_track_structure['previewEntry'],
+                        "previewLoopStart": music_track_structure['previewLoopStart'],
+                        "previewLoopEnd": music_track_structure['previewLoopEnd'],
+                        "volume": music_track_structure['volume']
+                    },
+                    "path": f"world/maps/{map_name.lower()}/audio/{map_name.lower()}.ogg",
+                    "url": f"jmcs://jd-contents/{map_name}/{map_name}.ogg"
+                }
             }
-        }
-    ]
-}
+        ]
+    }
     Util.save_file(f'output/{map_name}/{map_name.lower()}_musictrack.tpl.ckd', __music_track)
     Util.log(map_name, 'Successfully generated MusicTrack tape.')
 
