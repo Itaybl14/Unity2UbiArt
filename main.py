@@ -1,91 +1,238 @@
-# Unity2Ubiart by Rama and Itay
+# Unity2Ubiart v1.0 by Itay, Worte and Rama.
+import json, os, math, random, shutil
+from PIL import Image, ImageColor
 
-import json, os
-from random import randint
-
-print('Unity2Ubiart by Rama and Itay')
-
-def hextoubiart(hex):
-    # hex2ubiart by WorteJD, source: https://github.com/WorteJD/HEX-to-UbiArt-Color
-    rgb = tuple(int(hex[i:i+2], 16) for i in (0, 2, 4))
-    output = []
-    output.append(str(float(100) / 100)[:8])
-    output.append(str(rgb[0] / 255)[:8])
-    output.append(str(rgb[1] / 255)[:8])
-    output.append(str(rgb[2] / 255)[:8])
-    uac = []
-    for color in output:
-        uac.append(float(color))
-    return uac
-
-for filename in os.listdir('input'):
-    mainjson = json.load(open('input/' + filename, encoding='UTF-8')) # loading the json file
-    MapName = mainjson['m_Name']
-    tape = {"__class":"Tape","Clips":[],"TapeClock":0,"TapeBarCount":1,"FreeResourcesAfterPlay":0,"MapName":MapName,"SoundwichEvent":""}
-    print(f'[CONVERTING] {MapName}')
-    try:
-        os.mkdir('output/' + MapName)
-    except:
-        pass
-    # karaokeData Tape
-    words = mainjson['m_karaokeData']['Clips'] # load words from mainjson
-    for type in words:
-        word = type['KaraokeClip']
-        word["__class"] = 'KaraokeClip'
-        tape['Clips'].append(word)
-    open(f'output/{MapName}/{MapName.lower()}_tml_karaoke.ktape.ckd', 'w', encoding="utf-8").write(json.dumps(tape))
-
-    # DanceData Tape
-    tape['Clips'] = []
-    dancedata = mainjson['m_danceData']['MotionClips']
-    GoldEffectClips = []
-    for move in dancedata:
-        move['__class'] = 'MotionClip'
-        move['Color'] = hextoubiart(move['Color'].replace('0xFF', '')) # for some reason it uses hex colors with 0xFF in the start just like Just Dance Now
-        move['MotionPlatformSpecifics'] = {"X360":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1},"ORBIS":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":-0.200000,"HighThreshold":0.600000},"DURANGO":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1}}
-        if move['GoldMove'] == 1 and move['StartTime'] not in GoldEffectClips: # making Gold Move Effect
-            GoldEffectClips.append(move['StartTime']) # adding the StartTime to a list for not making multiple effects at the same time
-            # were adding 12 to the starttime unless it will come too early
-            tape['Clips'].append({"__class":"GoldEffectClip","IsActive":1,"Duration":24,"EffectType":0,"Id":randint(1000000000, 9999999999),"TrackId":randint(1000000000, 9999999999),"StartTime":move['StartTime'] + 12})
-        if f'world/maps/{MapName.lower()}/timeline/moves/' not in move['ClassifierPath']:
-            move['ClassifierPath'] = f'world/maps/{MapName.lower()}/timeline/moves/{move["ClassifierPath"]}'
-        tape['Clips'].append(move)
-
-    for picto in mainjson['m_danceData']['PictoClips']:
-        picto['PictoPath'] = f"world/maps/{MapName.lower()}/timeline/pictos/{picto['PictoPath'] + '.png'}" # your picto has to be named pictoname.png.ckd !!
-        picto['__class'] = 'PictogramClip'
-        tape['Clips'].append(picto)
-    
-    tape['Clips'].sort(key=lambda x: x["StartTime"]) # sorting the clips by their StartTime
-    open(f'output/{MapName}/{MapName.lower()}_tml_dance.dtape.ckd', 'w', encoding="utf-8").write(json.dumps(tape))
-
-    # MusicTrack
-    mt = {"__class":"Actor_Template","WIP":0,"LOWUPDATE":0,"UPDATE_LAYER":0,"PROCEDURAL":0,"STARTPAUSED":0,"FORCEISENVIRONMENT":0,"COMPONENTS":[{"__class":"MusicTrackComponent_Template","trackData":{"__class":"MusicTrackData","structure":{"__class":"MusicTrackStructure","markers":[],"signatures":[{"__class":"MusicSignature","marker":0,"beats":4}],"sections":[]},"path":f"world/maps/{MapName.lower()}/audio/{MapName.lower()}.wav","url":f"jmcs://jd-contents/{MapName}/{MapName}.ogg"}}]}
-    MusicTrackStructure = mainjson['m_trackData']['m_structure']['MusicTrackStructure']
-    for data in MusicTrackStructure:
-        if data == 'videoStartTime':
-            time = str(MusicTrackStructure['videoStartTime']).replace('.', '').replace('0', '')
-            if int(time)/1000 > -1: # for some reason some maps needs it, probably a beta bug
-                mt['COMPONENTS'][0]['trackData']['structure']['videoStartTime'] = MusicTrackStructure['videoStartTime']
+class Util:
+    def convert_pictogram(input_path, output_path, coach_count):
+            if coach_count == 1:
+                init_pictogram_size = (512, 512)
             else:
-                mt['COMPONENTS'][0]['trackData']['structure']['videoStartTime'] = float(int(time) / 1000.0)
-        elif data == 'markers':
-            for beat in MusicTrackStructure['markers']:
-                mt['COMPONENTS'][0]['trackData']['structure']['markers'].append(beat['VAL'])
-        elif data == 'comments' or data == 'sections' or data == 'signatures':
-            pass
-        else:
-            mt['COMPONENTS'][0]['trackData']['structure'][data] = MusicTrackStructure[data]
+                init_pictogram_size = (512, 354) # NOTE: causes stretching in original texture, not sure why is it 354 or why it has to be stretched at all
+
+            input_pictogram = Image.open(input_path)
+            x, y = input_pictogram.size
+
+            offset_x = math.floor((init_pictogram_size[0] - x) / 2)
+            offset_y = math.ceil(init_pictogram_size[1] - y)
+
+            output_pictogram = Image.new(input_pictogram.mode, init_pictogram_size, (255, 255, 255, 0))
+            output_pictogram.paste(input_pictogram, (offset_x, offset_y))
+            
+            if coach_count > 1:
+                output_pictogram = output_pictogram.resize((1024, 512))
+
+            output_pictogram.save(output_path)
+
+    def convert_list(input, __class):
+        output = []
+
+        for item in input:
+            value = item[__class]
+            value['__class'] = __class
+
+            output.append(value)
+        
+        return output
     
-    open(f'output/{MapName}/{MapName.lower()}_musictrack.tpl.ckd', 'w', encoding="utf-8").write(json.dumps(mt))
+    def convert_color(input):
+        rgb = ImageColor.getcolor(input, 'RGB')
+        output = []
 
-    # songDesc
-    m_songDesc = mainjson['m_songDesc']
-    NumCoach = m_songDesc['NumCoach']
-    songdesc = {"__class":"Actor_Template","WIP":0,"LOWUPDATE":0,"UPDATE_LAYER":0,"PROCEDURAL":0,"STARTPAUSED":0,"FORCEISENVIRONMENT":0,"COMPONENTS":[{"__class":"JD_SongDescTemplate","MapName":MapName,"JDVersion":m_songDesc['JDVersion'],"OriginalJDVersion":m_songDesc['OriginalJDVersion'],"Artist":m_songDesc['Artist'],"DancerName":"Unknown Dancer","Title":m_songDesc['Title'],"Credits":m_songDesc['Credits'],"PhoneImages":{"cover":f"world/maps/{MapName.lower()}/menuart/textures/{MapName.lower()}_cover_phone.jpg"},"NumCoach":NumCoach,"MainCoach":-1,"Difficulty":m_songDesc['Difficulty'],"SweatDifficulty":m_songDesc['SweatDifficulty'],"backgroundType":0,"LyricsType":0,"Tags":["main"],"Status":3,"LocaleID":4294967295,"MojoValue":0,"CountInProgression":1,"DefaultColors":{"lyrics":[1,1,0,0],"theme":[1,1,1,1]},"VideoPreviewPath":""}]}
-    for i in range(NumCoach):
+        output.append(float(str(float(100) / 100)[:8]))
+        output.append(float(str(rgb[0] / 255)[:8]))
+        output.append(float(str(rgb[1] / 255)[:8]))
+        output.append(float(str(rgb[2] / 255)[:8]))
+
+        return output
+    
+    def get_random_id():
+        return random.randint(1000000000, 9999999999)
+    
+    def load_file(input_path):
+        return json.load(open(input_path, encoding='UTF-8'))
+    
+    def save_file(output_path, input):
+        open(output_path, 'w', encoding='UTF-8').write(json.dumps(input))
+    
+    def make_folder(input_folder):
+        try:
+            os.mkdir(input_folder)
+        except:
+            pass
+    
+    def log(author, message):
+        print(f'[{author}] {message}')
+
+config = Util.load_file('config.json')
+
+for folder_name in os.listdir('input'):
+    music_track = Util.load_file(f'input/{folder_name}/MusicTrack.json')
+    map_json = Util.load_file(f'input/{folder_name}/{folder_name}.json')
+    map_name = map_json['m_Name']
+
+    Util.log('Tool', f'Started converting {map_name}!')
+    Util.make_folder(f'output/{map_name}')
+
+    tape = {"__class":"Tape","Clips":[],"TapeClock":0,"TapeBarCount":1,"FreeResourcesAfterPlay":0,"MapName":map_name,"SoundwichEvent":""}
+
+    for clip in map_json['KaraokeData']['Clips']:
+        karaoke_clip = clip['KaraokeClip']
+        karaoke_clip['__class'] = 'KaraokeClip'
+        tape['Clips'].append(karaoke_clip)
+    
+    tape['Clips'].sort(key=lambda x: x["StartTime"])
+    Util.save_file(f'output/{map_name}/{map_name.lower()}_tml_karaoke.ktape.ckd', tape)
+
+    Util.log(map_name, f'Successfully generated KaraokeData tape.')
+
+    tape['Clips'] = []
+
+    gold_effect_clips = []
+
+    for motion_clip in map_json['DanceData']['MotionClips']:
+        motion_clip['__class'] = 'MotionClip'
+        motion_clip['MoveType'] = 0
+        
+        try:
+            motion_clip['Color'] = Util.convert_color(motion_clip['Color'].replace('0xFF', '')) # for some reason it uses hex colors with 0xFF in the start just like Just Dance Now
+        except:
+            motion_clip['Color'] = [1,1,0,0] # red
+
+        if f'world/maps/{map_name.lower()}/timeline/moves' and '.gesture' not in motion_clip['MoveName']:
+            motion_clip['ClassifierPath'] = f"world/maps/{map_name.lower()}/timeline/moves/{motion_clip['MoveName']}.msm"
+            motion_clip.pop('MoveName')
+            if f'world/maps/{map_name.lower()}/timeline/moves/' not in motion_clip['ClassifierPath'] and '.gesture' not in motion_clip['ClassifierPath']:
+                 motion_clip['MotionPlatformSpecifics'] = {"X360":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1},"ORBIS":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":-0.200000,"HighThreshold":0.600000},"DURANGO":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1}}
+            tape['Clips'].append(motion_clip)
+
+    if 'GoldEffectClips' in map_json['DanceData']:
+        for gold_move in map_json['DanceData']['GoldEffectClips']:
+            gold_move['__class'] = "GoldEffectClip" 
+            tape['Clips'].append(gold_move)
+
+    # Picto Clips
+    for picto_clips in map_json['DanceData']['PictoClips']:
+        picto_clips['PictoPath'] = f"world/maps/{map_name.lower()}/timeline/pictos/{picto_clips['PictoPath']}.png"
+        picto_clips['__class'] = 'PictogramClip'
+
+        tape['Clips'].append(picto_clips)
+
+    tape['Clips'].sort(key=lambda x: x["StartTime"]) # sorting the clips by their StartTime
+
+    Util.save_file(f'output/{map_name}/{map_name.lower()}_tml_dance.dtape.ckd', tape)
+    Util.log(map_name, 'Successfully generated DanceData tape.')
+
+    # Song Description
+    song_desc = map_json['SongDesc']
+    __song_desc = {
+    "__class": "Actor_Template",
+    "WIP": 0,
+    "LOWUPDATE": 0,
+    "UPDATE_LAYER": 0,
+    "PROCEDURAL": 0,
+    "STARTPAUSED": 0,
+    "FORCEISENVIRONMENT": 0,
+    "COMPONENTS": [{
+            "__class": "JD_SongDescTemplate",
+            "MapName": map_name,
+            "JDVersion": config['JDVersion'],
+            "OriginalJDVersion": config['JDVersion'],
+            "Artist": song_desc['Artist'],
+            "DancerName": "Unknown Dancer",
+            "Title": song_desc['Title'],
+            "Credits":  song_desc['Credits'],
+            "PhoneImages": {
+                "cover": f"world/maps/{map_name.lower()}/menuart/textures/{map_name.lower()}_cover_phone.jpg"},
+            "NumCoach": song_desc['NumCoach'],
+            "MainCoach": -1, # without it the coaches says rip so
+            "Difficulty": song_desc['Difficulty'],
+            "SweatDifficulty": song_desc['SweatDifficulty'],
+            "backgroundType": 0,
+            "LyricsType": 0,
+            "Tags": ["main"],
+            "Status": 3,
+            "LocaleID": 4294967295,
+            "MojoValue": 0,
+            "CountInProgression": 1,
+            "DefaultColors": config['DefaultColors'],
+            "VideoPreviewPath": ""
+        }
+    ]}
+
+    for i in range(song_desc['NumCoach']):
         i += 1
-        songdesc['COMPONENTS'][0]['PhoneImages'][f'coach{i}'] = f"world/maps/{MapName.lower()}/menuart/textures/{MapName.lower()}_coach_{i}_phone.png"
+        __song_desc['COMPONENTS'][0]['PhoneImages'][f'coach{i}'] = f"world/maps/{map_name.lower()}/menuart/textures/{map_name.lower()}_coach_{i}_phone.png"
 
-    open(f'output/{MapName}/songdesc.tpl.ckd', 'w', encoding="utf-8").write(json.dumps(songdesc))
-    print(f"{m_songDesc['Title']} by {m_songDesc['Artist']}")
+    Util.save_file(f'output/{map_name}/songdesc.tpl.ckd', __song_desc)
+    Util.log(map_name, 'Successfully generated SongDescription tape.')
+
+    # Music Track
+    music_track_structure = music_track['m_structure']['MusicTrackStructure']
+    markers = []
+
+    for marker in music_track_structure['markers']:
+        markers.append(marker['VAL'])
+    
+    __music_track = {
+    "__class": "Actor_Template",
+    "WIP": 0,
+    "LOWUPDATE": 0,
+    "UPDATE_LAYER": 0,
+    "PROCEDURAL": 0,
+    "STARTPAUSED": 0,
+    "FORCEISENVIRONMENT": 0,
+    "COMPONENTS": [{
+            "__class": "MusicTrackComponent_Template",
+            "trackData": {
+                "__class": "MusicTrackData",
+                "structure": {
+                    "__class": "MusicTrackStructure",
+                    "markers": markers,
+                    "signatures": Util.convert_list(music_track_structure['signatures'], 'MusicSignature'),
+                    "sections": Util.convert_list(music_track_structure['sections'], 'MusicSection'),
+                    "startBeat": music_track_structure['startBeat'],
+                    "endBeat": music_track_structure['endBeat'],
+                    "videoStartTime": music_track_structure['videoStartTime'],
+                    "previewEntry": music_track_structure['previewEntry'],
+                    "previewLoopStart": music_track_structure['previewLoopStart'],
+                    "previewLoopEnd": music_track_structure['previewLoopEnd'],
+                    "volume": music_track_structure['volume']
+                },
+                "path": f"world/maps/{map_name.lower()}/audio/{map_name.lower()}.ogg",
+                "url": f"jmcs://jd-contents/{map_name}/{map_name}.ogg"
+            }
+        }
+    ]
+}
+    Util.save_file(f'output/{map_name}/{map_name.lower()}_musictrack.tpl.ckd', __music_track)
+    Util.log(map_name, 'Successfully generated MusicTrack tape.')
+
+    # cinematics:
+    if 'HideHudClips' in clip in map_json['DanceData']:
+        Util.make_folder(f'output/{map_name}/cinematics')
+        tape['Clips'] = []
+        for clip in map_json['DanceData']['HideHudClips']:
+            clip['__class'] = 'HideUserInterfaceClip'
+            clip['Id'] = Util.get_random_id()
+            clip['TrackId'] = Util.get_random_id()
+            clip['EventType'] = 18
+            clip['CustomParam'] = ''
+            tape['Clips'].append(clip)
+        Util.save_file(f'output/{map_name}/cinematics/{map_name.lower()}_mainsequence.tape.ckd', tape)
+
+    # resizing the pictos
+    if os.path.isdir(f'input/{folder_name}/pictos'):
+        Util.log(map_name, 'Input pictograms folder found, resizing...')
+        Util.make_folder(f'output/{map_name}/pictos')
+
+        for file_name in os.listdir(f'input/{folder_name}/pictos'):
+            Util.convert_pictogram(f'input/{folder_name}/pictos/{file_name}', f'output/{map_name}/pictos/{file_name}', song_desc['NumCoach'])
+            
+    # renaming moves files
+    if os.path.isdir(f'input/{folder_name}/moves'):
+        Util.log(map_name, 'Input moves folder found, renaming...')
+        Util.make_folder(f'output/{map_name}/moves')
+        for filename in os.listdir(f'input/{folder_name}/moves'):
+            shutil.copyfile(f'input/{folder_name}/moves/{filename.lower()}', f'output/{map_name}/moves/{filename.lower()}')
+    
+    Util.log('tool', 'Done!')
