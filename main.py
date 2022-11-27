@@ -46,7 +46,7 @@ class Util:
         return output
     
     def get_random_id():
-        return random.randint(1000000000, 9999999999)
+        return random.randint(1000000000, 6000000000)
     
     def load_file(input_path):
         return json.load(open(input_path, encoding='UTF-8'))
@@ -87,8 +87,6 @@ for folder_name in os.listdir('input'):
 
     tape['Clips'] = []
 
-    gold_effect_clips = []
-
     for motion_clip in map_json['DanceData']['MotionClips']:
         motion_clip['__class'] = 'MotionClip'
         motion_clip['MoveType'] = 0
@@ -108,6 +106,7 @@ for folder_name in os.listdir('input'):
     if 'GoldEffectClips' in map_json['DanceData']:
         for gold_move in map_json['DanceData']['GoldEffectClips']:
             gold_move['__class'] = "GoldEffectClip" 
+            gold_move['EffectType'] = 1
             tape['Clips'].append(gold_move)
 
     # Picto Clips
@@ -208,7 +207,7 @@ for folder_name in os.listdir('input'):
     Util.log(map_name, 'Successfully generated MusicTrack tape.')
 
     # cinematics:
-    if 'HideHudClips' in clip in map_json['DanceData']:
+    if 'HideHudClips' in map_json['DanceData']:
         Util.make_folder(f'output/{map_name}/cinematics')
         tape['Clips'] = []
         for clip in map_json['DanceData']['HideHudClips']:
@@ -218,7 +217,75 @@ for folder_name in os.listdir('input'):
             clip['EventType'] = 18
             clip['CustomParam'] = ''
             tape['Clips'].append(clip)
+        tape['Clips'].sort(key=lambda x: x["StartTime"]) # sorting the clips by their StartTime
+        if config['MakeAmbs']:
+            tape['Clips'].append({
+            "__class": "SoundSetClip",
+            "Id": Util.get_random_id(),
+            "TrackId": Util.get_random_id(),
+            "IsActive": 1,
+            "StartTime":tape['Clips'][0]['StartTime'],
+            "Duration": tape['Clips'][0]['Duration'],
+            "SoundSetPath": f"world/maps/{map_name.lower()}/audio/amb/amb_{map_name.lower()}_intro.tpl",
+            "SoundChannel": 0,
+            "StartOffset": 0,
+            "StopsOnEnd": 0,
+            "AccountedForDuration": 0
+        })
+            Util.make_folder(f'output/{map_name}/amb')
+            Util.save_file(f'output/{map_name}/amb/amb_{map_name.lower()}_intro.tpl.ckd', {
+    "__class": "Actor_Template",
+    "WIP": 0,
+    "LOWUPDATE": 0,
+    "UPDATE_LAYER": 0,
+    "PROCEDURAL": 0,
+    "STARTPAUSED": 0,
+    "FORCEISENVIRONMENT": 0,
+    "COMPONENTS": [
+        {
+            "__class": "SoundComponent_Template",
+            "soundList": [
+                {
+                    "__class": "SoundDescriptor_Template",
+                    "name": f"amb_{map_name.lower()}_intro",
+                    "volume": 0,
+                    "category": "amb",
+                    "limitCategory": "",
+                    "limitMode": 0,
+                    "maxInstances": 4294967295,
+                    "files": [
+                        f"world/maps/{map_name.lower()}/audio/amb/amb_{map_name.lower()}_intro.wav"
+                    ],
+                    "serialPlayingMode": 0,
+                    "serialStoppingMode": 0,
+                    "params": {
+                        "__class": "SoundParams",
+                        "loop": 0,
+                        "playMode": 1,
+                        "playModeInput": "",
+                        "randomVolMin": 0,
+                        "randomVolMax": 0,
+                        "delay": 0,
+                        "randomDelay": 0,
+                        "pitch": 1,
+                        "randomPitchMin": 1,
+                        "randomPitchMax": 1,
+                        "fadeInTime": 0.500000,
+                        "fadeOutTime": 0,
+                        "filterFrequency": 0,
+                        "filterType": 2,
+                        "transitionSampleOffset": 0
+                    },
+                    "pauseInsensitiveFlags": 0,
+                    "outDevices": 4294967295,
+                    "soundPlayAfterdestroy": 0
+                }
+            ]
+        }
+    ]
+})
         Util.save_file(f'output/{map_name}/cinematics/{map_name.lower()}_mainsequence.tape.ckd', tape)
+
 
     # resizing the pictos
     if os.path.isdir(f'input/{folder_name}/pictos'):
