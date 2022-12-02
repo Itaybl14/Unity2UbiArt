@@ -192,10 +192,10 @@ for folder_name in os.listdir('input'):
                     "startBeat": music_track_structure['startBeat'],
                     "endBeat": music_track_structure['endBeat'],
                     "videoStartTime": music_track_structure['videoStartTime'],
-                    "previewEntry": music_track_structure['previewEntry'],
-                    "previewLoopStart": music_track_structure['previewLoopStart'],
-                    "previewLoopEnd": music_track_structure['previewLoopEnd'],
-                    "volume": music_track_structure['volume']
+                    "previewEntry": int(music_track_structure['previewEntry']),
+                    "previewLoopStart": int(music_track_structure['previewLoopStart']),
+                    "previewLoopEnd": int(music_track_structure['previewLoopEnd']),
+                    "volume": int(music_track_structure['volume'])
                 },
                 "path": f"world/maps/{map_name.lower()}/audio/{map_name.lower()}.ogg",
                 "url": f"jmcs://jd-contents/{map_name}/{map_name}.ogg"
