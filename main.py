@@ -46,7 +46,7 @@ class Util:
         return output
     
     def get_random_id():
-        return random.randint(1000000000, 6000000000)
+        return random.randint(1000000000, 4000000000)
     
     def load_file(input_path):
         return json.load(open(input_path, encoding='UTF-8'))
