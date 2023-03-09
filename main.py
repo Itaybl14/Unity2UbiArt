@@ -121,7 +121,11 @@ class Util:
         return output
     
     def get_random_id():
-        return random.randint(1000000000, 9999999999)
+        while True:
+            id = random.randint(1000000000, 4000000000)
+            if id not in Util.Ids:
+                Util.Ids.append(id)
+                return id
     
     def load_file(input_path):
         return json.load(open(input_path, encoding='UTF-8'))
@@ -231,13 +235,13 @@ def main(mapName, filesPath, config):
                     "markers": markers,
                     "signatures": Util.convert_list(music_track_structure['signatures'], 'MusicSignature'),
                     "sections": Util.convert_list(music_track_structure['sections'], 'MusicSection'),
-                    "startBeat": music_track_structure['startBeat'],
-                    "endBeat": music_track_structure['endBeat'],
-                    "videoStartTime": music_track_structure['videoStartTime'],
-                    "previewEntry": music_track_structure['previewEntry'],
-                    "previewLoopStart": music_track_structure['previewLoopStart'],
-                    "previewLoopEnd": music_track_structure['previewLoopEnd'],
-                    "volume": music_track_structure['volume']
+                    "startBeat": music_track_structure.get('startBeat', 0),
+                    "endBeat": music_track_structure.get('endBeat', len(markers)),
+                    "videoStartTime": music_track_structure.get('videoStartTime', 0),
+                    "previewEntry": int(music_track_structure.get('previewEntry', 0)),
+                    "previewLoopStart": int(music_track_structure.get('previewLoopStart', 0)),
+                    "previewLoopEnd": int(music_track_structure.get('previewLoopEnd', len(markers))),
+                    "volume": int(music_track_structure.get('volume', 0))
                 },
                 "path": f"world/maps/{mapName.lower()}/audio/{mapName.lower()}.ogg",
                 "url": f"jmcs://jd-contents/{mapName}/{mapName}.ogg"
@@ -248,8 +252,7 @@ def main(mapName, filesPath, config):
     Util.log(mapName, 'Successfully generated MusicTrack tpl.')
 
     # cinematics:
-    if 'HideHudClips' in clip in map_json['DanceData']:
-        Util.make_folder(f'output/{map_name}/cinematics')
+    if 'HideHudClips' in map_json['DanceData']:
         tape['Clips'] = []
         for clip in map_json['DanceData']['HideHudClips']:
             clip['__class'] = 'HideUserInterfaceClip'
@@ -258,8 +261,121 @@ def main(mapName, filesPath, config):
             clip['EventType'] = 18
             clip['CustomParam'] = ''
             tape['Clips'].append(clip)
-        Util.save_file(f'output/{map_name}/cinematics/{map_name.lower()}_mainsequence.tape.ckd', tape)
+        tape['Clips'].sort(key=lambda x: x["StartTime"]) # sorting the clips by their StartTime
+        if (config['MakeAmbs']) and (len(tape['Clips']) >= 1):
+            tape['Clips'].append({
+            "__class": "SoundSetClip",
+            "Id": Util.get_random_id(),
+            "TrackId": Util.get_random_id(),
+            "IsActive": 1,
+            "StartTime":tape['Clips'][0]['StartTime'],
+            "Duration": tape['Clips'][0]['Duration'],
+            "SoundSetPath": f"world/maps/{mapName.lower()}/audio/amb/amb_{mapName.lower()}_intro.tpl",
+            "SoundChannel": 0,
+            "StartOffset": 0,
+            "StopsOnEnd": 0,
+            "AccountedForDuration": 0
+        })
+            Util.make_folder(f'output/{mapName}/amb')
+            Util.save_file(f'output/{mapName}/amb/amb_{mapName.lower()}_intro.tpl.ckd', {
+    "__class": "Actor_Template",
+    "WIP": 0,
+    "LOWUPDATE": 0,
+    "UPDATE_LAYER": 0,
+    "PROCEDURAL": 0,
+    "STARTPAUSED": 0,
+    "FORCEISENVIRONMENT": 0,
+    "COMPONENTS": [
+        {
+            "__class": "SoundComponent_Template",
+            "soundList": [
+                {
+                    "__class": "SoundDescriptor_Template",
+                    "name": f"amb_{mapName.lower()}_intro",
+                    "volume": 0,
+                    "category": "amb",
+                    "limitCategory": "",
+                    "limitMode": 0,
+                    "maxInstances": 4294967295,
+                    "files": [
+                        f"world/maps/{mapName.lower()}/audio/amb/amb_{mapName.lower()}_intro.wav"
+                    ],
+                    "serialPlayingMode": 0,
+                    "serialStoppingMode": 0,
+                    "params": {
+                        "__class": "SoundParams",
+                        "loop": 0,
+                        "playMode": 1,
+                        "playModeInput": "",
+                        "randomVolMin": 0,
+                        "randomVolMax": 0,
+                        "delay": 0,
+                        "randomDelay": 0,
+                        "pitch": 1,
+                        "randomPitchMin": 1,
+                        "randomPitchMax": 1,
+                        "fadeInTime": 0.500000,
+                        "fadeOutTime": 0,
+                        "filterFrequency": 0,
+                        "filterType": 2,
+                        "transitionSampleOffset": 0
+                    },
+                    "pauseInsensitiveFlags": 0,
+                    "outDevices": 4294967295,
+                    "soundPlayAfterdestroy": 0
+                }
+            ]
+        }
+    ]
+}, False)
+            Util.make_folder(f'output/{mapName}/cinematics')
+            Util.save_file(f'output/{mapName}/cinematics/{mapName.lower()}_mainsequence.tape.ckd', tape, False)
+        Util.log(mapName, 'Successfully generated MainSequence tape.')
+    
+    # ---- SongDescription ----
+    song_desc = map_json['SongDesc']
 
+    if 'NumCoach' in song_desc:
+        NumCoach = song_desc['NumCoach']
+    else:
+        NumCoach = input('NumCoach => ')
+    
+    Util.save_file(f'output/{mapName}/songdesc.tpl.ckd', {
+    "__class": "Actor_Template",
+    "WIP": 0,
+    "LOWUPDATE": 0,
+    "UPDATE_LAYER": 0,
+    "PROCEDURAL": 0,
+    "STARTPAUSED": 0,
+    "FORCEISENVIRONMENT": 0,
+    "COMPONENTS": [{
+            "__class": "JD_SongDescTemplate",
+            "MapName": mapName,
+            "JDVersion": config.get('JDVersion', 2023),
+            "OriginalJDVersion": config.get('JDVersion', 2023),
+            "Artist": song_desc.get('Artist', f"{mapName}'s Artist"),
+            "DancerName": "Unknown Dancer",
+            "Title": song_desc.get('Title', f"{mapName}'s Title"),
+            "Credits":  song_desc.get('Credits', 'All rights of the producer and other rightholders to the recorded work reserved. Unless otherwise authorized, the duplication, rental, loan, exchange or use of this video game for public performance, broadcasting and online distribution to the public are prohibited.'),
+            "PhoneImages": {
+                "cover": f"world/maps/{mapName.lower()}/menuart/textures/{mapName.lower()}_cover_phone.jpg",
+                **{f"coach{i+1}": f"world/maps/{mapName.lower()}/menuart/textures/{mapName.lower()}_coach_{i+1}_phone.png" for i in range(NumCoach)}
+            },
+            "NumCoach": NumCoach,
+            "MainCoach": -1, # without it the coaches says rip so
+            "Difficulty": song_desc.get('Difficulty', 1),
+            "SweatDifficulty": song_desc.get('SweatDifficulty', 1),
+            "backgroundType": 0,
+            "LyricsType": 0,
+            "Tags": ["main"],
+            "Status": 3,
+            "LocaleID": 4294967295,
+            "MojoValue": 0,
+            "CountInProgression": 1,
+            "DefaultColors": config.get('DefaultColors', {"songcolor_2a":[1,0.666667,0.666667,0.666667],"lyrics":[1,1,0,0],"theme":[1,1,1,1],"songcolor_1a":[1,0.266667,0.266667,0.266667],"songcolor_2b":[1,0.466667,0.466667,0.466667],"songcolor_1b":[1,0.066667,0.066667,0.066667]}),
+            "VideoPreviewPath": ""
+        }
+    ]}, False)
 
     # resizing the pictos
     pictos_path = Util.filePath(f'{filesPath}/pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
@@ -279,3 +395,24 @@ def main(mapName, filesPath, config):
             shutil.copyfile(f'{msm_path}/{filename.lower()}', f'output/{mapName}/moves/{filename.lower()}')
     
     Util.log('tool', 'Done!')
+
+
+if __name__ == '__main__':
+    for filename in os.listdir('input'):
+        filePath = f'input/{filename}'
+        print(f'{Fore.YELLOW}---- {filePath} ----{Style.RESET_ALL}')
+
+        if os.path.isfile(filePath):
+            Util.log('Tool', f'Extracting [{filePath}]')
+            mapName = Bundle.unpack_all_assets(filePath, 'input/temp')
+            filesPath = 'input/temp'
+        elif os.path.isdir(filePath):
+            mapName = filename
+            filesPath = filePath
+        
+        main(mapName, filesPath, config)
+        try:
+            shutil.rmtree('input/temp')
+        except:
+            pass
+    
