@@ -1,5 +1,5 @@
 # Unity2Ubiart v1.1 by Itay, Worte and Rama.
-import json, os, math, random, shutil, UnityPy
+import json, os, math, random, shutil, UnityPy, colorama
 from PIL import Image, ImageColor
 from colorama import Fore, Style
 
@@ -130,7 +130,7 @@ class Util:
     def load_file(input_path):
         return json.load(open(input_path, encoding='UTF-8'))
     
-    def save_file(path, jsonText, sortClips): # לשמור קובץ
+    def save_file(path, jsonText, sortClips):
         if sortClips:
             jsonText['Clips'].sort(key=lambda x: x["StartTime"])
         open(path, 'wb').write(json.dumps(jsonText, separators=(',', ':')).encode() + b'\x00')
@@ -140,24 +140,13 @@ class Util:
     
     def log(author, message):
         print(f'{Fore.MAGENTA}[{author}]:{Style.RESET_ALL} {Fore.BLUE}{message}{Style.RESET_ALL}')
-    
-    def error(message, toExit):
-        print(f'{Fore.MAGENTA}[ERROR]:{Style.RESET_ALL} {Fore.RED}{message}{Style.RESET_ALL}')
-        if toExit:
-            exit()
 
-    def filePath(path, altpath, errmsg, toExit):
+    def file_path(path, altpath, errmsg, toExit):
         if (os.path.isfile(path)) or (os.path.isdir(path)):
             return path
         elif (os.path.isfile(altpath)) or (os.path.isdir(altpath)):
             return altpath
         Util.error(errmsg, toExit)
-    
-    def mapDB(songdb, mapName):
-        for mapId in songdb:
-            if songdb[mapId]['mapName'] == mapName:
-                return songdb[mapId]
-        return False
     
         
 
@@ -165,8 +154,8 @@ config = Util.load_file('config.json')
 
 def main(mapName, filesPath, config):
     Util.make_folder(f'output/{mapName}')
-    music_track = Util.load_file(Util.filePath(f'{filesPath}/MonoBehaviour/MusicTrack.json', f'{filesPath}/MusicTrack.json', 'Cannot find your MusicTrack file', True))
-    map_json = Util.load_file(Util.filePath(f'{filesPath}/MonoBehaviour/{mapName}.json', f'{filesPath}/{mapName}.json', 'Cannot find your MainJson file', True))
+    music_track = Util.load_file(Util.file_path(f'{filesPath}/MonoBehaviour/MusicTrack.json', f'{filesPath}/MusicTrack.json', 'Cannot find your MusicTrack file', True))
+    map_json = Util.load_file(Util.file_path(f'{filesPath}/MonoBehaviour/{mapName}.json', f'{filesPath}/{mapName}.json', 'Cannot find your MainJson file', True))
 
     tape = {"__class":"Tape","Clips":[],"TapeClock":0,"TapeBarCount":1,"FreeResourcesAfterPlay":0,"MapName":mapName,"SoundwichEvent":""}
 
@@ -182,30 +171,33 @@ def main(mapName, filesPath, config):
     # ---- DanceData Tape ----
     tape['Clips'] = []
 
-    for motion_clip in map_json['DanceData']['MotionClips']:
-        motion_clip['__class'] = 'MotionClip'
-        motion_clip['MoveType'] = 0
-        
+    for motion_clip in map_json['DanceData']['MotionClips']:        
         motion_clip['Color'] = Util.convert_color(motion_clip['Color'][4:]) # for some reason it uses hex colors with 0xFF in the start just like Just Dance Now
 
-        if f'world/maps/{mapName.lower()}/timeline/moves' and '.gesture' not in motion_clip['MoveName']:
-            motion_clip['ClassifierPath'] = f"world/maps/{mapName.lower()}/timeline/moves/{motion_clip['MoveName']}.msm"
+        if motion_clip['MoveType'] == 0: # 0 = MSM
+            motion_clip.update({
+                '__class': 'MotionClip',
+                'ClassifierPath': f"world/maps/{mapName.lower()}/timeline/moves/{motion_clip['MoveName']}.msm",
+                'MotionPlatformSpecifics': {"X360":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1},"ORBIS":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":-0.200000,"HighThreshold":0.600000},"DURANGO":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1}}
+            })
             motion_clip.pop('MoveName')
-            motion_clip['MotionPlatformSpecifics'] = {"X360":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1},"ORBIS":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":-0.200000,"HighThreshold":0.600000},"DURANGO":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1}}
             tape['Clips'].append(motion_clip)
 
     if 'GoldEffectClips' in map_json['DanceData']:
         for gold_move in map_json['DanceData']['GoldEffectClips']:
-            gold_move['__class'] = "GoldEffectClip" 
-            gold_move['EffectType'] = 1
+            gold_move.update({
+                '__class': 'GoldEffectClip',
+                'EffectType': 1
+            })
             tape['Clips'].append(gold_move)
 
     # Picto Clips
-    for picto_clips in map_json['DanceData']['PictoClips']:
-        picto_clips['PictoPath'] = f"world/maps/{mapName.lower()}/timeline/pictos/{picto_clips['PictoPath']}.png"
-        picto_clips['__class'] = 'PictogramClip'
-
-        tape['Clips'].append(picto_clips)
+    for picto_clip in map_json['DanceData']['PictoClips']:
+        picto_clip.update({
+            '__class': 'PictogramClip',
+            'PictoPath': f"world/maps/{mapName.lower()}/timeline/pictos/{picto_clip['PictoPath']}.png"
+        })
+        tape['Clips'].append(picto_clip)
 
     Util.save_file(f'output/{mapName}/{mapName.lower()}_tml_dance.dtape.ckd', tape, True)
     Util.log(mapName, 'Successfully generated DanceData tape.')
@@ -217,7 +209,8 @@ def main(mapName, filesPath, config):
     for marker in music_track_structure['markers']:
         markers.append(marker['VAL'])
 
-    
+    startBeat = music_track_structure.get('startBeat', 0)
+    endBeat = music_track_structure.get('endBeat', len(markers))
     Util.save_file(f'output/{mapName}/{mapName.lower()}_musictrack.tpl.ckd', {
     "__class": "Actor_Template",
     "WIP": 0,
@@ -235,8 +228,8 @@ def main(mapName, filesPath, config):
                     "markers": markers,
                     "signatures": Util.convert_list(music_track_structure['signatures'], 'MusicSignature'),
                     "sections": Util.convert_list(music_track_structure['sections'], 'MusicSection'),
-                    "startBeat": music_track_structure.get('startBeat', 0),
-                    "endBeat": music_track_structure.get('endBeat', len(markers)),
+                    "startBeat": startBeat,
+                    "endBeat": endBeat,
                     "videoStartTime": music_track_structure.get('videoStartTime', 0),
                     "previewEntry": int(music_track_structure.get('previewEntry', 0)),
                     "previewLoopStart": int(music_track_structure.get('previewLoopStart', 0)),
@@ -252,32 +245,34 @@ def main(mapName, filesPath, config):
     Util.log(mapName, 'Successfully generated MusicTrack tpl.')
 
     # cinematics:
+    tape['Clips'] = []
     if 'HideHudClips' in map_json['DanceData']:
-        tape['Clips'] = []
         for clip in map_json['DanceData']['HideHudClips']:
-            clip['__class'] = 'HideUserInterfaceClip'
-            clip['Id'] = Util.get_random_id()
-            clip['TrackId'] = Util.get_random_id()
-            clip['EventType'] = 18
-            clip['CustomParam'] = ''
+            clip.update({
+                '__class': 'HideUserInterfaceClip',
+                'Id': Util.get_random_id(),
+                'TrackId': Util.get_random_id(),
+                'EventType': 18,
+                'CustomParam': ''
+            })
             tape['Clips'].append(clip)
-        tape['Clips'].sort(key=lambda x: x["StartTime"]) # sorting the clips by their StartTime
-        if (config['MakeAmbs']) and (len(tape['Clips']) >= 1):
-            tape['Clips'].append({
+    if (config['MakeAmbs']) and (startBeat != 0):
+        # NOTE: other ambs can be included inside the main audio
+        tape['Clips'].append({
             "__class": "SoundSetClip",
             "Id": Util.get_random_id(),
             "TrackId": Util.get_random_id(),
             "IsActive": 1,
-            "StartTime":tape['Clips'][0]['StartTime'],
-            "Duration": tape['Clips'][0]['Duration'],
+            "StartTime":startBeat * 24,
+            "Duration": endBeat * 24, # NOTE: can be changed, its prob not that long...
             "SoundSetPath": f"world/maps/{mapName.lower()}/audio/amb/amb_{mapName.lower()}_intro.tpl",
             "SoundChannel": 0,
             "StartOffset": 0,
             "StopsOnEnd": 0,
             "AccountedForDuration": 0
         })
-            Util.make_folder(f'output/{mapName}/amb')
-            Util.save_file(f'output/{mapName}/amb/amb_{mapName.lower()}_intro.tpl.ckd', {
+        Util.make_folder(f'output/{mapName}/amb')
+        Util.save_file(f'output/{mapName}/amb/amb_{mapName.lower()}_intro.tpl.ckd', {
     "__class": "Actor_Template",
     "WIP": 0,
     "LOWUPDATE": 0,
@@ -328,8 +323,10 @@ def main(mapName, filesPath, config):
         }
     ]
 }, False)
-            Util.make_folder(f'output/{mapName}/cinematics')
-            Util.save_file(f'output/{mapName}/cinematics/{mapName.lower()}_mainsequence.tape.ckd', tape, False)
+    
+    if len(tape['Clips']) > 0:
+        Util.make_folder(f'output/{mapName}/cinematics')
+        Util.save_file(f'output/{mapName}/cinematics/{mapName.lower()}_mainsequence.tape.ckd', tape, False)
         Util.log(mapName, 'Successfully generated MainSequence tape.')
     
     # ---- SongDescription ----
@@ -338,7 +335,7 @@ def main(mapName, filesPath, config):
     if 'NumCoach' in song_desc:
         NumCoach = song_desc['NumCoach']
     else:
-        NumCoach = input('NumCoach => ')
+        NumCoach = 4 # default
     
     Util.save_file(f'output/{mapName}/songdesc.tpl.ckd', {
     "__class": "Actor_Template",
@@ -378,7 +375,7 @@ def main(mapName, filesPath, config):
     ]}, False)
 
     # resizing the pictos
-    pictos_path = Util.filePath(f'{filesPath}/pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
+    pictos_path = Util.file_path(f'{filesPath}/pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
     if pictos_path:
         Util.log(mapName, 'Input pictograms folder found, resizing...')
         Util.make_folder(f'output/{mapName}/pictos')
@@ -387,7 +384,7 @@ def main(mapName, filesPath, config):
             Util.convert_pictogram(f'{pictos_path}/{file_name}', f'output/{mapName}/pictos/{file_name}', NumCoach)
             
     # renaming moves files
-    msm_path = Util.filePath(f'{filesPath}/moves', f'{filesPath}/TextAsset', 'Cannot find your moves path', False)
+    msm_path = Util.file_path(f'{filesPath}/moves', f'{filesPath}/TextAsset', 'Cannot find your moves path', False)
     if msm_path:
         Util.log(mapName, 'Input moves folder found, renaming...')
         Util.make_folder(f'output/{mapName}/moves')
@@ -398,8 +395,12 @@ def main(mapName, filesPath, config):
 
 
 if __name__ == '__main__':
+    colorama.init()
     for filename in os.listdir('input'):
         filePath = f'input/{filename}'
+        if not os.path.isfile(filePath):
+            continue
+
         print(f'{Fore.YELLOW}---- {filePath} ----{Style.RESET_ALL}')
 
         if os.path.isfile(filePath):
@@ -415,4 +416,3 @@ if __name__ == '__main__':
             shutil.rmtree('input/temp')
         except:
             pass
-    
