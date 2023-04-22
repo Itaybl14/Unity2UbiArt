@@ -398,8 +398,6 @@ if __name__ == '__main__':
     colorama.init()
     for filename in os.listdir('input'):
         filePath = f'input/{filename}'
-        if not os.path.isfile(filePath):
-            continue
 
         print(f'{Fore.YELLOW}---- {filePath} ----{Style.RESET_ALL}')
 
