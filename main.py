@@ -1,9 +1,30 @@
 # Unity2Ubiart v1.1 by Itay, Worte and Rama.
-import json, os, math, random, shutil, UnityPy, colorama
-from PIL import Image, ImageColor
+import json, os, math, random, shutil, UnityPy, colorama, time, requests
+from PIL import Image
 from colorama import Fore, Style
 
 class Bundle:
+    def unpack_Texture2D(source_file: str, destination_folder: str):
+        os.makedirs(os.path.join(destination_folder), exist_ok=True)
+        env = UnityPy.load(source_file)
+
+        # iterate over internal objects
+        for obj in env.objects:
+            # process specific object types
+            if obj.type.name == "Texture2D":
+                # parse the object data
+                data = obj.read()
+
+                # create destination path
+                dest = os.path.join(destination_folder, data.name)
+
+                # make sure that the extension is correct
+                dest, ext = os.path.splitext(dest)
+                dest = f"{dest}.png"
+
+                img = data.image
+                img.save(dest)
+            
     def unpack_all_assets(source_file: str, destination_folder: str):
         # create subfolders for each asset type
         asset_types = ['TextAsset', 'Sprite', 'MonoBehaviour']
@@ -108,7 +129,7 @@ class Util:
     
     def convert_color(input):
         try:
-            rgb = ImageColor.getcolor(input, 'RGB')
+            rgb = tuple(int(input[i:i+2], 16) for i in (0, 2, 4))
         except:
             return [1, 1, 0, 0]
         output = []
@@ -140,6 +161,12 @@ class Util:
     
     def log(author, message):
         print(f'{Fore.MAGENTA}[{author}]:{Style.RESET_ALL} {Fore.BLUE}{message}{Style.RESET_ALL}')
+    
+    def error(errmsg, toExit):
+        print(f'{Fore.RED}[ERROR]: {errmsg}{Style.RESET_ALL}')
+        if toExit:
+            time.sleep(5)
+            exit()
 
     def file_path(path, altpath, errmsg, toExit):
         if (os.path.isfile(path)) or (os.path.isdir(path)):
@@ -147,7 +174,15 @@ class Util:
         elif (os.path.isfile(altpath)) or (os.path.isdir(altpath)):
             return altpath
         Util.error(errmsg, toExit)
-    
+
+    def songdb_mapinfo(map_name):
+        songdb = Util.load_file('songdb.json')
+        for map_id in songdb:
+            map_info = songdb[map_id]
+            if map_info['mapName'] == map_name:
+                Util.log(map_name, 'Loaded SongDB Info')
+                return map_info
+        return 
         
 
 config = Util.load_file('config.json')
@@ -202,6 +237,14 @@ def main(mapName, filesPath, config):
     Util.save_file(f'output/{mapName}/{mapName.lower()}_tml_dance.dtape.ckd', tape, True)
     Util.log(mapName, 'Successfully generated DanceData tape.')
 
+    # ---- SongDB Items ----
+    map_info = Util.songdb_mapinfo(mapName)
+    if map_info:
+        songdb_musictrack = json.loads(map_info['assetsMetadata']['audioPreviewTrk'])
+        Util.log(mapName, 'Successfully loaded SongDB info.')
+    else:
+        songdb_musictrack = None
+
     # ---- MusicTrack Tape ----
     music_track_structure = music_track['m_structure']['MusicTrackStructure']
     markers = []
@@ -211,7 +254,7 @@ def main(mapName, filesPath, config):
 
     startBeat = music_track_structure.get('startBeat', 0)
     endBeat = music_track_structure.get('endBeat', len(markers))
-    Util.save_file(f'output/{mapName}/{mapName.lower()}_musictrack.tpl.ckd', {
+    UbiArt_music_track = {
     "__class": "Actor_Template",
     "WIP": 0,
     "LOWUPDATE": 0,
@@ -231,9 +274,9 @@ def main(mapName, filesPath, config):
                     "startBeat": startBeat,
                     "endBeat": endBeat,
                     "videoStartTime": music_track_structure.get('videoStartTime', 0),
-                    "previewEntry": int(music_track_structure.get('previewEntry', 0)),
-                    "previewLoopStart": int(music_track_structure.get('previewLoopStart', 0)),
-                    "previewLoopEnd": int(music_track_structure.get('previewLoopEnd', len(markers))),
+                    "previewEntry": songdb_musictrack['PreviewEntry'] if songdb_musictrack else int(music_track_structure.get('previewEntry', 0)),
+                    "previewLoopStart": songdb_musictrack['PreviewLoopStart'] if songdb_musictrack else int(music_track_structure.get('previewLoopStart', 0)),
+                    "previewLoopEnd": songdb_musictrack['PreviewLoopEnd'] if songdb_musictrack and 'PreviewLoopEnd' in songdb_musictrack else int(music_track_structure.get('previewLoopEnd', endBeat)),
                     "volume": int(music_track_structure.get('volume', 0))
                 },
                 "path": f"world/maps/{mapName.lower()}/audio/{mapName.lower()}.ogg",
@@ -241,7 +284,11 @@ def main(mapName, filesPath, config):
             }
         }
     ]
-}, False)
+}
+    if UbiArt_music_track["COMPONENTS"][0]['trackData']['structure']['previewLoopEnd'] == 0:
+        UbiArt_music_track["COMPONENTS"][0]['trackData']['structure']['previewLoopEnd'] = endBeat
+    
+    Util.save_file(f'output/{mapName}/{mapName.lower()}_musictrack.tpl.ckd', UbiArt_music_track, False)
     Util.log(mapName, 'Successfully generated MusicTrack tpl.')
 
     # cinematics:
@@ -337,7 +384,7 @@ def main(mapName, filesPath, config):
     else:
         NumCoach = 4 # default
     
-    Util.save_file(f'output/{mapName}/songdesc.tpl.ckd', {
+    UbiArt_song_description = {
     "__class": "Actor_Template",
     "WIP": 0,
     "LOWUPDATE": 0,
@@ -349,19 +396,19 @@ def main(mapName, filesPath, config):
             "__class": "JD_SongDescTemplate",
             "MapName": mapName,
             "JDVersion": config.get('JDVersion', 2023),
-            "OriginalJDVersion": config.get('JDVersion', 2023),
-            "Artist": song_desc.get('Artist', f"{mapName}'s Artist"),
+            "OriginalJDVersion": map_info['originalJDVersion'] if map_info else config.get('JDVersion', 2023),
+            "Artist": map_info['artist'] if map_info else song_desc.get('Artist', f"{mapName}'s Artist"),
             "DancerName": "Unknown Dancer",
-            "Title": song_desc.get('Title', f"{mapName}'s Title"),
-            "Credits":  song_desc.get('Credits', 'All rights of the producer and other rightholders to the recorded work reserved. Unless otherwise authorized, the duplication, rental, loan, exchange or use of this video game for public performance, broadcasting and online distribution to the public are prohibited.'),
+            "Title": map_info['title'] if map_info else song_desc.get('Title', f"{mapName}'s Title"),
+            "Credits": map_info['credits'] if map_info else song_desc.get('Credits', 'All rights of the producer and other rightholders to the recorded work reserved. Unless otherwise authorized, the duplication, rental, loan, exchange or use of this video game for public performance, broadcasting and online distribution to the public are prohibited.'),
             "PhoneImages": {
                 "cover": f"world/maps/{mapName.lower()}/menuart/textures/{mapName.lower()}_cover_phone.jpg",
                 **{f"coach{i+1}": f"world/maps/{mapName.lower()}/menuart/textures/{mapName.lower()}_coach_{i+1}_phone.png" for i in range(NumCoach)}
             },
             "NumCoach": NumCoach,
             "MainCoach": -1, # without it the coaches says rip so
-            "Difficulty": song_desc.get('Difficulty', 1),
-            "SweatDifficulty": song_desc.get('SweatDifficulty', 1),
+            "Difficulty": map_info['difficulty'] if map_info else song_desc.get('Difficulty', 1),
+            "SweatDifficulty": map_info['sweatDifficulty'] if map_info else song_desc.get('SweatDifficulty', 1),
             "backgroundType": 0,
             "LyricsType": 0,
             "Tags": ["main"],
@@ -369,10 +416,17 @@ def main(mapName, filesPath, config):
             "LocaleID": 4294967295,
             "MojoValue": 0,
             "CountInProgression": 1,
-            "DefaultColors": config.get('DefaultColors', {"songcolor_2a":[1,0.666667,0.666667,0.666667],"lyrics":[1,1,0,0],"theme":[1,1,1,1],"songcolor_1a":[1,0.266667,0.266667,0.266667],"songcolor_2b":[1,0.466667,0.466667,0.466667],"songcolor_1b":[1,0.066667,0.066667,0.066667]}),
+            "DefaultColors": config.get('DefaultColors', {"songcolor_2a":[1,0.666667,0.666667,0.666667],"lyrics": [1,1,0,0],"theme":[1,1,1,1],"songcolor_1a":[1,0.266667,0.266667,0.266667],"songcolor_2b":[1,0.466667,0.466667,0.466667],"songcolor_1b":[1,0.066667,0.066667,0.066667]}),
             "VideoPreviewPath": ""
         }
-    ]}, False)
+    ]}
+
+    if map_info:
+        UbiArt_song_description["COMPONENTS"][0]['DefaultColors']['lyrics'] = Util.convert_color(map_info['lyricsColor'][1:-2])
+
+    Util.save_file(f'output/{mapName}/songdesc.tpl.ckd', UbiArt_song_description , False)
+
+    # ---- Pictograms ----
 
     # resizing the pictos
     pictos_path = Util.file_path(f'{filesPath}/pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
@@ -390,6 +444,19 @@ def main(mapName, filesPath, config):
         Util.make_folder(f'output/{mapName}/moves')
         for filename in os.listdir(msm_path):
             shutil.copyfile(f'{msm_path}/{filename.lower()}', f'output/{mapName}/moves/{filename.lower()}')
+    
+    # ---- MenuArt ----
+    if map_info:
+        MenuArt_path = os.path.join('output', mapName, 'MenuArt')
+        assets = map_info['assets']
+        Util.log(mapName, 'Downloading SongDB assets...')
+        for asset in config['DownloadableAssets']:
+            if asset in assets:
+                filePath_ = os.path.join(filesPath, asset)
+                open(filePath_, 'wb').write(requests.get(assets[asset]).content) # basic file saving
+                Bundle.unpack_Texture2D(filePath_, MenuArt_path)
+                os.remove(filePath_)
+
     
     Util.log('tool', 'Done!')
 

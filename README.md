@@ -5,13 +5,15 @@ A simple script for converting Unity Just Dance tape's to UbiArt Just Dance tape
 
 ## Credits
 
+ - [Itay](https://github.com/Itaybl14)
  - [Rama](https://github.com/rama0dev)
  - [Worte](https://github.com/wortestudios)
 
-## Options
+## Input Options
 
  - mapPackage (Unity .bundle files)
  - Raw input (check [input](/input/MapName) for example)
+ - SongDB
 
 ### - Please credit us in your work.
 

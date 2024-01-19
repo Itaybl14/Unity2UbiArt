@@ -1,6 +1,6 @@
 {
     "MakeAmbs": true,
-    "JDVersion": 2023,
+    "JDVersion": 2024,
     "DefaultColors": {
         "songcolor_2a": [1, 0.666667, 0.666667, 0.666667],
         "lyrics": [1, 1, 0, 0],
@@ -8,5 +8,6 @@
         "songcolor_1a": [1, 0.266667, 0.266667, 0.266667],
         "songcolor_2b": [1, 0.466667, 0.466667, 0.466667],
         "songcolor_1b": [1, 0.066667, 0.066667, 0.066667]
-    }
+    },
+    "DownloadableAssets": ["coachesLarge", "coachesSmall", "cover", "cover1024", "coverSmall", "songTitleLogo"]
 }
