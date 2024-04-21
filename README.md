@@ -15,7 +15,7 @@ A simple script for converting Unity Just Dance tape's to UbiArt Just Dance tape
  - Raw input (check [input](/input/MapName) for example)
  - SongDB
 
-## Intsall
+## Installation
 
  - pip install unitypy==1.10.6
 
