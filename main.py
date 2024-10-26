@@ -1,4 +1,4 @@
-# Unity2Ubiart v1.1 by Itay, Worte and Rama.
+# Unity2Ubiart by Itay, Worte and Rama.
 import json, os, math, random, shutil, UnityPy, colorama, time, requests
 from PIL import Image
 from colorama import Fore, Style
@@ -180,9 +180,21 @@ class Util:
         for map_id in songdb:
             map_info = songdb[map_id]
             if map_info['mapName'] == map_name:
-                Util.log(map_name, 'Loaded SongDB Info')
+                Util.log(map_name, 'Loaded SongDB Info.')
                 return map_info
         return 
+    
+    def copy_files(input_folder, output_folder, file_extension):
+        for filename in os.listdir(input_folder):
+            if filename.split('.')[-1] == file_extension:
+                shutil.copyfile(f'{input_folder}/{filename.lower()}', f'{output_folder}/{filename.lower()}')
+    
+    def gestures_exist_check(movespaces):
+        movespaces = os.listdir(movespaces)
+        if 'algoSettings' in movespaces:
+            return 'PozeNet'
+        elif 'scoringRules' in movespaces:
+            return 'BlazePose'
         
 
 config = Util.load_file('config.json')
@@ -195,12 +207,14 @@ def main(mapName, filesPath, config):
     tape = {"__class":"Tape","Clips":[],"TapeClock":0,"TapeBarCount":1,"FreeResourcesAfterPlay":0,"MapName":mapName,"SoundwichEvent":""}
 
     # ---- KaraokeData Tape ----
+    Util.make_folder(f'output/{mapName}/Timeline')
+
     for clip in map_json['KaraokeData']['Clips']:
         karaoke_clip = clip['KaraokeClip']
         karaoke_clip['__class'] = 'KaraokeClip'
         tape['Clips'].append(karaoke_clip)
     
-    Util.save_file(f'output/{mapName}/{mapName.lower()}_tml_karaoke.ktape.ckd', tape, True)
+    Util.save_file(f'output/{mapName}/Timeline/{mapName.lower()}_tml_karaoke.ktape.ckd', tape, True)
     Util.log(mapName, f'Successfully generated KaraokeData tape.')
 
     # ---- DanceData Tape ----
@@ -212,7 +226,15 @@ def main(mapName, filesPath, config):
         if motion_clip['MoveType'] == 0: # 0 = MSM
             motion_clip.update({
                 '__class': 'MotionClip',
-                'ClassifierPath': f"world/maps/{mapName.lower()}/timeline/moves/{motion_clip['MoveName']}.msm",
+                'ClassifierPath': f"world/maps/{mapName.lower()}/timeline/moves/{motion_clip['MoveName']}.msm"
+            })
+            motion_clip.pop('MoveName')
+            tape['Clips'].append(motion_clip)
+        
+        elif motion_clip['MoveType'] == 1: # 1 = GESTURE
+            motion_clip.update({
+                '__class': 'MotionClip',
+                'ClassifierPath': f"world/maps/{mapName.lower()}/timeline/moves/{motion_clip['MoveName']}.gesture",
                 'MotionPlatformSpecifics': {"X360":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1},"ORBIS":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":-0.200000,"HighThreshold":0.600000},"DURANGO":{"__class":"MotionPlatformSpecific","ScoreScale":1,"ScoreSmoothing":0,"LowThreshold":0.200000,"HighThreshold":1}}
             })
             motion_clip.pop('MoveName')
@@ -234,7 +256,7 @@ def main(mapName, filesPath, config):
         })
         tape['Clips'].append(picto_clip)
 
-    Util.save_file(f'output/{mapName}/{mapName.lower()}_tml_dance.dtape.ckd', tape, True)
+    Util.save_file(f'output/{mapName}/Timeline/{mapName.lower()}_tml_dance.dtape.ckd', tape, True)
     Util.log(mapName, 'Successfully generated DanceData tape.')
 
     # ---- SongDB Items ----
@@ -246,6 +268,7 @@ def main(mapName, filesPath, config):
         songdb_musictrack = None
 
     # ---- MusicTrack Tape ----
+    Util.make_folder(f'output/{mapName}/Audio')
     music_track_structure = music_track['m_structure']['MusicTrackStructure']
     markers = []
 
@@ -274,9 +297,9 @@ def main(mapName, filesPath, config):
                     "startBeat": startBeat,
                     "endBeat": endBeat,
                     "videoStartTime": music_track_structure.get('videoStartTime', 0),
-                    "previewEntry": songdb_musictrack['PreviewEntry'] if songdb_musictrack else int(music_track_structure.get('previewEntry', 0)),
-                    "previewLoopStart": songdb_musictrack['PreviewLoopStart'] if songdb_musictrack else int(music_track_structure.get('previewLoopStart', 0)),
-                    "previewLoopEnd": songdb_musictrack['PreviewLoopEnd'] if songdb_musictrack and 'PreviewLoopEnd' in songdb_musictrack else int(music_track_structure.get('previewLoopEnd', endBeat)),
+                    "previewEntry": int(songdb_musictrack['PreviewEntry']) if songdb_musictrack else int(music_track_structure.get('previewEntry', 0)),
+                    "previewLoopStart": int(songdb_musictrack['PreviewLoopStart']) if songdb_musictrack else int(music_track_structure.get('previewLoopStart', 0)),
+                    "previewLoopEnd": int(songdb_musictrack['PreviewLoopEnd']) if songdb_musictrack and 'PreviewLoopEnd' in songdb_musictrack else int(music_track_structure.get('previewLoopEnd', endBeat)),
                     "volume": int(music_track_structure.get('volume', 0))
                 },
                 "path": f"world/maps/{mapName.lower()}/audio/{mapName.lower()}.ogg",
@@ -288,10 +311,10 @@ def main(mapName, filesPath, config):
     if UbiArt_music_track["COMPONENTS"][0]['trackData']['structure']['previewLoopEnd'] == 0:
         UbiArt_music_track["COMPONENTS"][0]['trackData']['structure']['previewLoopEnd'] = endBeat
     
-    Util.save_file(f'output/{mapName}/{mapName.lower()}_musictrack.tpl.ckd', UbiArt_music_track, False)
+    Util.save_file(f'output/{mapName}/Audio/{mapName.lower()}_musictrack.tpl.ckd', UbiArt_music_track, False)
     Util.log(mapName, 'Successfully generated MusicTrack tpl.')
 
-    # cinematics:
+    # ---- Cinematics ----
     tape['Clips'] = []
     if 'HideHudClips' in map_json['DanceData']:
         for clip in map_json['DanceData']['HideHudClips']:
@@ -311,15 +334,15 @@ def main(mapName, filesPath, config):
             "TrackId": Util.get_random_id(),
             "IsActive": 1,
             "StartTime":startBeat * 24,
-            "Duration": endBeat * 24, # NOTE: can be changed, its prob not that long...
+            "Duration": abs(startBeat * 24), # NOTE: can be changed, its prob not that long...
             "SoundSetPath": f"world/maps/{mapName.lower()}/audio/amb/amb_{mapName.lower()}_intro.tpl",
             "SoundChannel": 0,
             "StartOffset": 0,
             "StopsOnEnd": 0,
             "AccountedForDuration": 0
         })
-        Util.make_folder(f'output/{mapName}/amb')
-        Util.save_file(f'output/{mapName}/amb/amb_{mapName.lower()}_intro.tpl.ckd', {
+        Util.make_folder(f'output/{mapName}/Audio/AMB')
+        Util.save_file(f'output/{mapName}/Audio/AMB/amb_{mapName.lower()}_intro.tpl.ckd', {
     "__class": "Actor_Template",
     "WIP": 0,
     "LOWUPDATE": 0,
@@ -356,7 +379,7 @@ def main(mapName, filesPath, config):
                         "pitch": 1,
                         "randomPitchMin": 1,
                         "randomPitchMax": 1,
-                        "fadeInTime": 0.500000,
+                        "fadeInTime": 0,
                         "fadeOutTime": 0,
                         "filterFrequency": 0,
                         "filterType": 2,
@@ -372,8 +395,8 @@ def main(mapName, filesPath, config):
 }, False)
     
     if len(tape['Clips']) > 0:
-        Util.make_folder(f'output/{mapName}/cinematics')
-        Util.save_file(f'output/{mapName}/cinematics/{mapName.lower()}_mainsequence.tape.ckd', tape, False)
+        Util.make_folder(f'output/{mapName}/Cinematics')
+        Util.save_file(f'output/{mapName}/Cinematics/{mapName.lower()}_mainsequence.tape.ckd', tape, False)
         Util.log(mapName, 'Successfully generated MainSequence tape.')
     
     # ---- SongDescription ----
@@ -432,18 +455,22 @@ def main(mapName, filesPath, config):
     pictos_path = Util.file_path(f'{filesPath}/pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
     if pictos_path:
         Util.log(mapName, 'Input pictograms folder found, resizing...')
-        Util.make_folder(f'output/{mapName}/pictos')
+        Util.make_folder(f'output/{mapName}/Timeline/pictos')
 
         for file_name in os.listdir(pictos_path):
-            Util.convert_pictogram(f'{pictos_path}/{file_name}', f'output/{mapName}/pictos/{file_name}', NumCoach)
+            Util.convert_pictogram(f'{pictos_path}/{file_name}', f'output/{mapName}/Timeline/pictos/{file_name}', NumCoach)
             
-    # renaming moves files
-    msm_path = Util.file_path(f'{filesPath}/moves', f'{filesPath}/TextAsset', 'Cannot find your moves path', False)
-    if msm_path:
-        Util.log(mapName, 'Input moves folder found, renaming...')
-        Util.make_folder(f'output/{mapName}/moves')
-        for filename in os.listdir(msm_path):
-            shutil.copyfile(f'{msm_path}/{filename.lower()}', f'output/{mapName}/moves/{filename.lower()}')
+    # movespaces
+    movespaces = Util.file_path(f'{filesPath}/moves', f'{filesPath}/TextAsset', 'Cannot find your moves path', False)
+    if movespaces:
+        Util.log(mapName, 'Input moves folder found, copying...')
+        Util.make_folder(f'output/{mapName}/Timeline/Moves/WIIU')
+        Util.copy_files(movespaces, f'output/{mapName}/Timeline/Moves/WIIU', 'msm')
+        gesture = Util.gestures_exist_check(movespaces)
+        if gesture:
+            Util.log(mapName, f'{gesture} gestures found!.')
+            Util.make_folder(f'output/{mapName}/Timeline/Moves/{gesture.upper()}')
+            Util.copy_files(movespaces, f'output/{mapName}/Timeline/Moves/{gesture.upper()}', 'gesture')
     
     # ---- MenuArt ----
     if map_info:
