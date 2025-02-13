@@ -1,7 +1,11 @@
-# Unity2Ubiart by Itay, Worte and Rama.
-import json, os, math, random, shutil, UnityPy, colorama, time, requests
+# Unity2Ubiart v1.1 by Itay, Worte and Rama.
+import json, os, math, random, shutil, UnityPy, colorama, time, requests, subprocess
 from PIL import Image
 from colorama import Fore, Style
+import tkinter as tk
+from tkinter import filedialog
+
+UnityPy.config.FALLBACK_UNITY_VERSION = '2021.3.9f1'
 
 class Bundle:
     def unpack_Texture2D(source_file: str, destination_folder: str):
@@ -24,6 +28,8 @@ class Bundle:
 
                 img = data.image
                 img.save(dest)
+                if not dest.endswith('_Phone.png'): # if its not a phone texture
+                    Util.convert_to_dxt5(dest, dest.replace('.png', '.dds'))
             
     def unpack_all_assets(source_file: str, destination_folder: str):
         # create subfolders for each asset type
@@ -196,6 +202,21 @@ class Util:
         elif 'scoringRules' in movespaces:
             return 'BlazePose'
         
+    def convert_to_dxt5(input_path, output_path):
+        # still needs to be updated, the converted dds file is too big compared to ubi ones.
+        subprocess.run(f"bin\\nvcompress.exe -bc3 \"{input_path}\" \"{output_path}\"", shell=True, stdout=subprocess.DEVNULL)
+        os.remove(input_path)
+
+    def pick_audio_file(mapName):
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+        
+        file_path = filedialog.askopenfilename(
+            title=f"Select {mapName} Audio File",
+            filetypes=[("Audio Files", "*.opus;*.wav;*.ogg;*.mp3;*.flac"), ("All Files", "*.*")]
+        )
+
+        return file_path
 
 config = Util.load_file('config.json')
 
@@ -327,7 +348,7 @@ def main(mapName, filesPath, config):
             })
             tape['Clips'].append(clip)
     if (config['MakeAmbs']) and (startBeat != 0):
-        # NOTE: other ambs can be included inside the main audio
+        # NOTE: other ambs can be included inside the main audio because were using their online sound which includes ambs
         tape['Clips'].append({
             "__class": "SoundSetClip",
             "Id": Util.get_random_id(),
@@ -398,6 +419,19 @@ def main(mapName, filesPath, config):
         Util.make_folder(f'output/{mapName}/Cinematics')
         Util.save_file(f'output/{mapName}/Cinematics/{mapName.lower()}_mainsequence.tape.ckd', tape, False)
         Util.log(mapName, 'Successfully generated MainSequence tape.')
+
+    # ---- Audio Cutter ----
+    # NOTE: the audio cutting is not perfect, and can be off for some maps! (ex. WheneverWhereverALT)
+    if config['cutAudio']:
+        Util.log(mapName, 'Cutting audio...')
+        audioFile = Util.pick_audio_file(mapName)
+        if audioFile:
+            start = markers[int(abs(startBeat))] / 48
+            subprocess.run(f'ffmpeg -y -i "{audioFile}" -ss {start}ms -loglevel quiet "output/{mapName}/Audio/{mapName.lower()}.ogg"')
+            if (config['MakeAmbs']) and (startBeat != 0):
+                subprocess.run(f'ffmpeg -y -i "{audioFile}" -ss 00:00:00 -t {start}ms -vn -loglevel quiet "output/{mapName}/Audio/AMB/amb_{mapName.lower()}_intro.wav"')
+        else:
+            Util.error('No audio file selected, skipping audio cutting.', False)
     
     # ---- SongDescription ----
     song_desc = map_json['SongDesc']
@@ -451,14 +485,23 @@ def main(mapName, filesPath, config):
 
     # ---- Pictograms ----
 
-    # resizing the pictos
-    pictos_path = Util.file_path(f'{filesPath}/pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
+    # resizing/converting the pictos
+    pictos_path = Util.file_path(f'{filesPath}/Pictos', f'{filesPath}/Sprite', 'Cannot find your pictograms path', False)
     if pictos_path:
-        Util.log(mapName, 'Input pictograms folder found, resizing...')
-        Util.make_folder(f'output/{mapName}/Timeline/pictos')
+        Util.log(mapName, 'Input pictograms folder found, converting...')
+        Util.make_folder(f'output/{mapName}/Timeline/Pictos')
 
         for file_name in os.listdir(pictos_path):
-            Util.convert_pictogram(f'{pictos_path}/{file_name}', f'output/{mapName}/Timeline/pictos/{file_name}', NumCoach)
+            pictoPath = os.path.join(pictos_path, file_name)
+            output_PictoPath = os.path.join(f'output/{mapName}/Timeline/Pictos', file_name)
+            with Image.open(pictoPath) as img:
+                width, height = img.size
+                if width == height and NumCoach == 1: # only older maps (2023) needs resizing, and only if theres only 1 coach
+                    shutil.copy(pictoPath, output_PictoPath)
+                else:
+                    Util.convert_pictogram(f'{pictos_path}/{file_name}', output_PictoPath, NumCoach)
+            
+            Util.convert_to_dxt5(output_PictoPath, output_PictoPath.replace('.png', '.dds'))
             
     # movespaces
     movespaces = Util.file_path(f'{filesPath}/moves', f'{filesPath}/TextAsset', 'Cannot find your moves path', False)
@@ -491,20 +534,20 @@ def main(mapName, filesPath, config):
 if __name__ == '__main__':
     colorama.init()
     for filename in os.listdir('input'):
-        filePath = f'input/{filename}'
+        filePath = os.path.join('input', filename)
 
         print(f'{Fore.YELLOW}---- {filePath} ----{Style.RESET_ALL}')
 
         if os.path.isfile(filePath):
             Util.log('Tool', f'Extracting [{filePath}]')
-            mapName = Bundle.unpack_all_assets(filePath, 'input/temp')
-            filesPath = 'input/temp'
+            filesPath = os.path.join('input', 'temp')
+            mapName = Bundle.unpack_all_assets(filePath, filesPath)
         elif os.path.isdir(filePath):
             mapName = filename
             filesPath = filePath
         
         main(mapName, filesPath, config)
         try:
-            shutil.rmtree('input/temp')
+            shutil.rmtree(os.path.join('input', 'temp'))
         except:
             pass

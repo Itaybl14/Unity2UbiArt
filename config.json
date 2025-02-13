@@ -1,6 +1,7 @@
 {
     "MakeAmbs": true,
-    "JDVersion": 2024,
+    "cutAudio": true,
+    "JDVersion": 2025,
     "DefaultColors": {
         "songcolor_2a": [1, 0.666667, 0.666667, 0.666667],
         "lyrics": [1, 1, 0, 0],
