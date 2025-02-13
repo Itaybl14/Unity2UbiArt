@@ -427,9 +427,9 @@ def main(mapName, filesPath, config):
         audioFile = Util.pick_audio_file(mapName)
         if audioFile:
             start = markers[int(abs(startBeat))] / 48
-            subprocess.run(f'ffmpeg -y -i "{audioFile}" -ss {start}ms -loglevel quiet "output/{mapName}/Audio/{mapName.lower()}.ogg"')
+            subprocess.run(f'bin\\ffmpeg -y -i "{audioFile}" -ss {start}ms -loglevel quiet "output/{mapName}/Audio/{mapName.lower()}.ogg"')
             if (config['MakeAmbs']) and (startBeat != 0):
-                subprocess.run(f'ffmpeg -y -i "{audioFile}" -ss 00:00:00 -t {start}ms -vn -loglevel quiet "output/{mapName}/Audio/AMB/amb_{mapName.lower()}_intro.wav"')
+                subprocess.run(f'bin\\ffmpeg -y -i "{audioFile}" -ss 00:00:00 -t {start}ms -vn -loglevel quiet "output/{mapName}/Audio/AMB/amb_{mapName.lower()}_intro.wav"')
         else:
             Util.error('No audio file selected, skipping audio cutting.', False)
     
