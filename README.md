@@ -15,7 +15,7 @@ A simple script for converting Unity Just Dance tape's to UbiArt Just Dance tape
 ### Installation
 To install UnityPy properly, use the following command:
 ```bash
-pip install unitypy==1.10.6
+pip install unitypy==1.9.28
 ```
 ### Audio Cutter
 You'll also need to install FFmpeg. Make sure the FFmpeg executable is located in the ./bin directory. You can disable this in the `config.json` file if preferred.
@@ -25,5 +25,6 @@ You'll also need to install FFmpeg. Make sure the FFmpeg executable is located i
 
 ### License
 Please remember to credit the authors if you use or modify this script in your work.
+
 
 ![WatchOutForThis](https://ramastuff.ramaprojects.ru/other/Unity2UbiArt.png)
