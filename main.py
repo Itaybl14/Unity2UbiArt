@@ -1,106 +1,58 @@
-# Unity2Ubiart v1.1 by Itay, Worte and Rama.
-import json, os, math, random, shutil, UnityPy, colorama, time, requests, subprocess
+import json, os, math, random, shutil, colorama, time, requests, subprocess
 from PIL import Image
 from colorama import Fore, Style
 import tkinter as tk
 from tkinter import filedialog
 
-UnityPy.config.FALLBACK_UNITY_VERSION = '2021.3.9f1'
+UNITY_VERSION = "2021.3.9f1"
 
 class Bundle:
     def unpack_Texture2D(source_file: str, destination_folder: str):
-        os.makedirs(os.path.join(destination_folder), exist_ok=True)
-        env = UnityPy.load(source_file)
+        os.makedirs(destination_folder, exist_ok=True)
 
-        # iterate over internal objects
-        for obj in env.objects:
-            # process specific object types
-            if obj.type.name == "Texture2D":
-                # parse the object data
-                data = obj.read()
+        subprocess.run(
+            [
+                "bin\\AssetStudioModCLI\\AssetStudioModCLI.exe",
+                source_file,
+                "-o", destination_folder,
+                "-t", "Texture2D",
+                "--unity-version", UNITY_VERSION,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
 
-                # create destination path
-                dest = os.path.join(destination_folder, data.name)
-
-                # make sure that the extension is correct
-                dest, ext = os.path.splitext(dest)
-                dest = f"{dest}.png"
-
-                img = data.image
-                img.save(dest)
-                if not dest.endswith('_Phone.png'): # if its not a phone texture
-                    Util.convert_to_dxt5(dest, dest.replace('.png', '.dds'))
-            
     def unpack_all_assets(source_file: str, destination_folder: str):
-        # create subfolders for each asset type
-        asset_types = ['TextAsset', 'Sprite', 'MonoBehaviour']
-        for asset_type in asset_types:
-            os.makedirs(os.path.join(destination_folder, asset_type), exist_ok=True)
+        os.makedirs(destination_folder, exist_ok=True)
 
-        map_name = ''
-        # load the bundle file via UnityPy.load
-        env = UnityPy.load(source_file)
+        subprocess.run(
+            [
+                "bin\\AssetStudioModCLI\\AssetStudioModCLI.exe",
+                source_file,
+                "-o", destination_folder,
+                "-g", "type",
+                "--unity-version", UNITY_VERSION,
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
 
-        # iterate over internal objects
-        for obj in env.objects:
-            # process specific object types
-            if obj.type.name == "Sprite":
-                # parse the object data
-                data = obj.read()
+        mono_dir = os.path.join(destination_folder, "MonoBehaviour")
+        if not os.path.isdir(mono_dir):
+            raise FileNotFoundError(f"MonoBehaviour folder not found: {mono_dir}")
 
-                # create destination path
-                dest = os.path.join(destination_folder, 'Sprite', data.name)
+        map_candidates = [
+            f for f in os.listdir(mono_dir)
+            if f.endswith(".json") and f != "MusicTrack.json"
+        ]
 
-                # make sure that the extension is correct
-                dest, ext = os.path.splitext(dest)
-                dest = f"{dest}.png"
+        if not map_candidates:
+            raise RuntimeError(f"Could not figure out mapName: no map json found in {mono_dir}")
 
-                img = data.image
-                img.save(dest)
-                    
-            elif obj.type.name == "TextAsset":
-                # export asset
-                data = obj.read()
-                with open(os.path.join(destination_folder, 'TextAsset', data.name), "wb") as f:
-                    f.write(bytes(data.script))
-
-                # edit asset
-                fp = os.path.join(destination_folder, 'TextAsset', data.name)
-                with open(fp, "rb") as f:
-                    data.script = f.read()
-                data.save()
-                    
-            elif obj.type.name == "MonoBehaviour":
-                mono_behaviour_extract_folder = os.path.join(destination_folder, 'MonoBehaviour')
-
-                # export
-                if obj.serialized_type.nodes:
-                    # save decoded data
-                    tree = obj.read_typetree()
-                    if tree['m_Name'] == '':
-                        tree['m_Name'] = 'MusicTrack'
-                    else:
-                        map_name = tree['m_Name']
-                    fp = os.path.join(mono_behaviour_extract_folder, f"{tree['m_Name']}.json")
-                    with open(fp, "wt", encoding="utf8") as f:
-                        json.dump(tree, f, ensure_ascii=False, indent=4)
-                else:
-                    # save raw relevant data (without Unity MonoBehaviour header)
-                    data = obj.read()
-                    fp = os.path.join(mono_behaviour_extract_folder, f"{data.name}.bin")
-                    with open(fp, "wb") as f:
-                        f.write(data.raw_data)
-
-                # edit
-                if obj.serialized_type.nodes:
-                    tree = obj.read_typetree()
-                    # apply modifications to the data within the tree
-                    obj.save_typetree(tree)
-                else:
-                    data = obj.read()
-                    with open(os.path.join(mono_behaviour_extract_folder, data.name)) as f:
-                        data.save(raw_data=f.read())
-
+        # if there are multiple, pick the first (or you can add stricter logic)
+        map_name = os.path.splitext(map_candidates[0])[0]
         return map_name
 
 class Util:
@@ -201,11 +153,6 @@ class Util:
             return 'PozeNet'
         elif 'scoringRules' in movespaces:
             return 'BlazePose'
-        
-    def convert_to_dxt5(input_path, output_path):
-        # still needs to be updated, the converted dds file is too big compared to ubi ones.
-        subprocess.run(f"bin\\nvcompress.exe -bc3 \"{input_path}\" \"{output_path}\"", shell=True, stdout=subprocess.DEVNULL)
-        os.remove(input_path)
 
     def pick_audio_file(mapName):
         root = tk.Tk()
@@ -500,9 +447,7 @@ def main(mapName, filesPath, config):
                     shutil.copy(pictoPath, output_PictoPath)
                 else:
                     Util.convert_pictogram(f'{pictos_path}/{file_name}', output_PictoPath, NumCoach)
-            
-            Util.convert_to_dxt5(output_PictoPath, output_PictoPath.replace('.png', '.dds'))
-            
+                        
     # movespaces
     movespaces = Util.file_path(f'{filesPath}/moves', f'{filesPath}/TextAsset', 'Cannot find your moves path', False)
     if movespaces:
@@ -517,7 +462,7 @@ def main(mapName, filesPath, config):
     
     # ---- MenuArt ----
     if map_info:
-        MenuArt_path = os.path.join('output', mapName, 'MenuArt')
+        MenuArt_path = os.path.join('output', mapName, 'MenuArt', "Textures")
         assets = map_info['assets']
         Util.log(mapName, 'Downloading SongDB assets...')
         for asset in config['DownloadableAssets']:
