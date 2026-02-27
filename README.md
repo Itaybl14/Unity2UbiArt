@@ -20,8 +20,9 @@ Download **AssetStudioModCLI** from:
 
 👉 [https://github.com/aelurum/AssetStudio/releases](https://github.com/aelurum/AssetStudio/releases)
 
-After downloading, place `AssetStudioModCLI.exe` inside:
+Download the Windows CLI release and extract it.
 
+⚠️ Place ALL extracted files inside:
 ```
 ./bin/AssetStudioModCLI/
 ```
