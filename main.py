@@ -58,13 +58,13 @@ class Bundle:
 class Util:
     Ids = []
     def convert_pictogram(input_path, output_path, coach_count):
-            if coach_count == 1:
-                init_pictogram_size = (512, 512)
-            else:
-                init_pictogram_size = (512, 354) # NOTE: causes stretching in original texture, not sure why is it 354 or why it has to be stretched at all
-
             input_pictogram = Image.open(input_path)
             x, y = input_pictogram.size
+
+            if coach_count == 1:
+                init_pictogram_size = (512 if x == 512 else 256, 512 if y == 512 else 256)
+            else:
+                init_pictogram_size = (512 if x == 512 else 370, 354 if y == 354 else 256) # NOTE: causes stretching in original texture, not sure why is it 354 or why it has to be stretched at all
 
             offset_x = math.floor((init_pictogram_size[0] - x) / 2)
             offset_y = math.ceil(init_pictogram_size[1] - y)
